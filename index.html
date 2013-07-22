@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Cam</title>
+  <style>
+    #video,
+    #canvas,
+    #img {
+      width: 640px;
+      height: 480px;
+    }
+    #video,
+    #canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <video id="video"></video>
+  <button id="startbutton">Pause</button>
+  <canvas id="canvas"></canvas>
+  <img src="http://placekitten.com/g/320/261" id="photo" alt="photo" width="640" height="480">
+
+  <script>
+  (function() {
+
+    var video        = document.getElementById("video"),
+        canvas       = document.getElementById("canvas"),
+        photo        = document.getElementById("photo"),
+        startbutton  = document.getElementById("startbutton"),
+        progressBar  = document.getElementById("progress"),
+        width = 640,
+        height = 0,
+        intervalRate = 500, /* 500 = 2fps */
+        intervalID;
+
+    navigator.getMedia = ( navigator.getUserMedia ||
+                           navigator.webkitGetUserMedia ||
+                           navigator.mozGetUserMedia ||
+                           navigator.msGetUserMedia);
+
+    navigator.getMedia(
+      {
+        video: true,
+        audio: false
+      },
+      function(stream) {
+        if (navigator.mozGetUserMedia) {
+          video.mozSrcObject = stream;
+        } else {
+          var vendorURL = window.URL || window.webkitURL;
+          video.src = vendorURL.createObjectURL(stream);
+        }
+        video.play();
+      },
+      function(err) {
+        console.log("navigator.getMedia error: " + err);
+      }
+    );
+
+    function startcapture() {
+      takepicture();
+      intervalID = setInterval(takepicture, intervalRate);
+    }
+
+    var frames = 0;
+    video.addEventListener('timeupdate', function timeupdate(ev){
+      if (frames++ < 2)
+        return;
+
+      video.removeEventListener('timeupdate', timeupdate);
+      height = video.videoHeight / (video.videoWidth/width);
+      video.setAttribute('width', width);
+      video.setAttribute('height', height);
+      canvas.setAttribute('width', width);
+      canvas.setAttribute('height', height);
+
+      startcapture();
+    });
+
+    function drawtext(ctx, text) {
+      ctx.fillStyle = "#ffa";
+      ctx.font = "bold 18px monospace";
+      ctx.lineWidth = 4;
+      ctx.textBaseline = "top";
+      ctx.strokeStyle = "#000";
+      ctx.strokeText(text, 5, 5);
+      ctx.fillText(text, 5, 5);
+    }
+
+    function takepicture() {
+      canvas.width = width;
+      canvas.height = height;
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, width, height);
+      var date = new Date();
+      drawtext(ctx, date.toLocaleDateString() + " " +
+                    date.toLocaleTimeString());
+      canvas.toBlob(function (blob) {
+        var url = URL.createObjectURL(blob);
+        photo.addEventListener("load", function onload() {
+          photo.removeEventListener("load", onload);
+          URL.revokeObjectURL(url);
+        });
+        photo.src = url;
+
+        var formData = new FormData(); //this will submit as a "multipart/form-data" request
+        formData.append("image_name", blob); //"image_name" is what the server will call the blob
+        upload(formData); //upload the "formData", not the "blob"
+      }, "image/jpeg", 0.1);
+    }
+
+    startbutton.addEventListener('click', function(ev){
+      ev.preventDefault();
+      if (intervalID) {
+        clearInterval(intervalID);
+        intervalID = 0;
+        startbutton.textContent = "Resume";
+        return;
+      }
+
+      startcapture();
+      startbutton.textContent = "Pause";
+    }, false);
+
+    function upload(blobOrFile) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', 'http://www.example.com/upload_file.php', true);
+      xhr.onload = function(e) { /*uploaded*/ };
+
+      // Listen to the upload progress.
+      xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable)
+          {
+            progressBar.value = (e.loaded / e.total) * 100;
+            progressBar.textContent = progressBar.value;
+          }
+      };
+      xhr.send(blobOrFile);
+    }
+
+  })();
+  </script>
+</body>
+</html>
